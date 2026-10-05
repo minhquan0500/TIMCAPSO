@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tìm Cặp Số Ma Trận</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Tùy chỉnh thanh cuộn */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen p-4 sm:p-8 font-sans text-slate-800">
+
+    <div class="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        <!-- Khung Nhập Liệu -->
+        <div class="bg-white p-6 rounded-2xl shadow-lg border border-slate-100 flex flex-col">
+            <h1 class="text-xl font-bold text-slate-800 mb-2">Nhập Ma Trận</h1>
+            <p class="text-sm text-slate-500 mb-4">Paste trực tiếp ma trận vào ô bên dưới (các số cách nhau bởi khoảng trắng hoặc tab).</p>
+            
+            <textarea id="matrixInput" class="w-full flex-grow min-h-[300px] p-4 font-mono text-sm border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none resize-y bg-slate-50" placeholder="Ví dụ:&#10;13 32 42 46 48 49&#10;8 21 24 41 44 52..."></textarea>
+            
+            <div class="mt-4 flex gap-3">
+                <button onclick="processMatrix()" class="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl shadow-md transition-colors">
+                    Tìm các cặp số (>= 3 lần)
+                </button>
+                <button onclick="clearInput()" class="px-6 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold rounded-xl transition-colors">
+                    Xóa
+                </button>
+            </div>
+        </div>
+
+        <!-- Khung Kết Quả -->
+        <div class="bg-slate-900 p-6 rounded-2xl shadow-lg flex flex-col relative">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold text-white">Kết Quả</h2>
+                <button onclick="copyResult()" id="copyBtn" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm font-medium rounded-lg transition-colors hidden">
+                    Sao chép
+                </button>
+            </div>
+            
+            <pre id="outputResult" class="w-full flex-grow h-[300px] lg:h-auto overflow-auto p-4 font-mono text-sm text-emerald-400 bg-slate-950 rounded-xl border border-slate-800"></pre>
+        </div>
+
+    </div>
+
+    <script>
+        function processMatrix() {
+            const input = document.getElementById('matrixInput').value.trim();
+            const outputElement = document.getElementById('outputResult');
+            const copyBtn = document.getElementById('copyBtn');
+            
+            if (!input) {
+                outputElement.textContent = "Vui lòng nhập ma trận.";
+                outputElement.classList.replace('text-emerald-400', 'text-red-400');
+                copyBtn.classList.add('hidden');
+                return;
+            }
+            
+            outputElement.classList.replace('text-red-400', 'text-emerald-400');
+
+            // Xử lý chuỗi nhập vào thành mảng 2 chiều
+            const lines = input.split(/\r?\n/).filter(line => line.trim() !== '');
+            const a = lines.map(line => line.trim().split(/\s+/).map(Number));
+            
+            const rows = a.length;
+            if (rows === 0) return;
+            const cols = a[0].length;
+
+            // Hướng: right, down, down-right, up-right
+            const dx = [0, 1, 1, -1];
+            const dy = [1, 0, 1, 1];
+
+            // Dùng object thay cho map và Set để track các cặp đã dùng
+            const occ = {};
+            const usedPairs = new Set();
+
+            for (let i = 0; i < rows; ++i) {
+                for (let j = 0; j < cols; ++j) {
+                    for (let d = 0; d < 4; ++d) {
+                        let ni = i + dx[d];
+                        let nj = j + dy[d];
+
+                        if (ni >= 0 && ni < rows && nj >= 0 && nj < cols) {
+                            let x = a[i][j];
+                            let y = a[ni][nj];
+
+                            if (x === y) continue;
+
+                            // Tạo key cặp giá trị (luôn xếp số nhỏ trước)
+                            let key = x < y ? `${x},${y}` : `${y},${x}`;
+
+                            // Tạo tọa độ (1-indexed)
+                            let r1 = i + 1, c1 = j + 1;
+                            let r2 = ni + 1, c2 = nj + 1;
+
+                            // So sánh tọa độ để xếp chuẩn p1 < p2
+                            let isP1Less = (r1 < r2) || (r1 === r2 && c1 < c2);
+                            
+                            let p1 = isP1Less ? {r: r1, c: c1} : {r: r2, c: c2};
+                            let p2 = isP1Less ? {r: r2, c: c2} : {r: r1, c: c1};
+                            
+                            // Chuỗi định danh vị trí để check trùng (overlap)
+                            let posStr = `${p1.r},${p1.c}|${p2.r},${p2.c}`;
+
+                            if (usedPairs.has(posStr)) continue;
+
+                            if (!occ[key]) occ[key] = [];
+                            occ[key].push({ p1, p2 });
+                            usedPairs.add(posStr);
+                        }
+                    }
+                }
+            }
+
+            // Sắp xếp các key tăng dần giống std::map trong C++
+            const sortedKeys = Object.keys(occ).sort((a, b) => {
+                const [a1, a2] = a.split(',').map(Number);
+                const [b1, b2] = b.split(',').map(Number);
+                if (a1 !== b1) return a1 - b1;
+                return a2 - b2;
+            });
+
+            let outputStr = "Cac cap so xuat hien tu 3 lan tro len (xet 4 huong, khong tinh trung, khong cho overlap):\n";
+            let found = false;
+
+            for (const key of sortedKeys) {
+                const occurrences = occ[key];
+                if (occurrences.length >= 3) {
+                    found = true;
+                    const [x, y] = key.split(',');
+                    outputStr += `(${x}, ${y}) : ${occurrences.length} lan\n`;
+                    outputStr += `  Vi tri (dong, cot) cua cac lan xuat hien:\n`;
+                    for (const pos of occurrences) {
+                        outputStr += `    (${pos.p1.r},${pos.p1.c}) <-> (${pos.p2.r},${pos.p2.c})\n`;
+                    }
+                }
+            }
+
+            if (!found) {
+                outputStr = "Khong co cap nao xuat hien >= 3 lan.\n";
+            }
+
+            outputElement.textContent = outputStr;
+            copyBtn.classList.remove('hidden');
+        }
+
+        function clearInput() {
+            document.getElementById('matrixInput').value = '';
+            document.getElementById('outputResult').textContent = '';
+            document.getElementById('copyBtn').classList.add('hidden');
+            document.getElementById('matrixInput').focus();
+        }
+
+        function copyResult() {
+            const outputText = document.getElementById('outputResult').textContent;
+            navigator.clipboard.writeText(outputText);
+            
+            const btn = document.getElementById('copyBtn');
+            const originalText = btn.innerText;
+            btn.innerText = "Đã chép ✓";
+            btn.classList.replace('bg-slate-700', 'bg-emerald-600');
+            btn.classList.replace('hover:bg-slate-600', 'hover:bg-emerald-700');
+            
+            setTimeout(() => {
+                btn.innerText = originalText;
+                btn.classList.replace('bg-emerald-600', 'bg-slate-700');
+                btn.classList.replace('hover:bg-emerald-700', 'hover:bg-slate-600');
+            }, 2000);
+        }
+    </script>
+</body>
+</html>
